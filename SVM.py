@@ -71,10 +71,10 @@ class SVM():
                 alpha_j = self.alpha[j]
                 i = rand(self.n, j)
                 alpha_i = self.alpha[i]
-                L, H = self.compute_L_H(alpha_j, alpha_i, y[j], y[i])
                 eta = self.cache_kernel(i, i) + self.cache_kernel(j, j) - 2 * self.cache_kernel(min(i, j), max(i, j))
                 if eta == 0:
                     continue
+                L, H = self.compute_L_H(alpha_j, alpha_i, y[j], y[i])
                 Ei, Ej = self.u[i] - y[i], self.u[j] - y[j]
                 alpha_j_new = alpha_j + y[j] * (Ei - Ej) / eta
                 alpha_j_new = max(min(alpha_j_new, H), L)
@@ -85,9 +85,11 @@ class SVM():
                 b_2 = self.b + Ej + y[i] * (alpha_i_new - alpha_i) * self.cache_kernel(min(i, j), max(i, j)) \
                         + y[j] * (alpha_j_new - alpha_j) * self.cache_kernel(j, j)
                 
-                if 0 <= alpha_j_new <= self.C:
+                # if 0 <= alpha_j_new <= self.C:
+                if not self.with_epsilon(alpha_j_new, 0) and not self.with_epsilon(alpha_j_new, self.C):
                     self.b = b_2
-                elif 0 <= alpha_i_new <= self.C:
+                # elif 0 <= alpha_i_new <= self.C:
+                elif not self.with_epsilon(alpha_i_new, 0) and not self.with_epsilon(alpha_i_new, self.C):
                     self.b = b_1
                 else:
                     self.b = (b_1 + b_2)/2
@@ -96,7 +98,7 @@ class SVM():
                 self.alpha[j] = alpha_j_new
                 self.update()
 
-        support_vector = self.alpha > 0       
+        support_vector = (self.with_epsilon(self.alpha, 0) == False)
         self.alpha = self.alpha[support_vector]
         self.X = self.X[support_vector]
         self.y = self.y[support_vector]
@@ -110,9 +112,9 @@ class SVM():
         result = np.zeros((self.n), dtype=np.bool)
         v = self.y * self.u
         for i in range(self.n):
-            if self.alpha[i] == 0:
+            if self.with_epsilon(self.alpha[i], 0):
                 result[i] = v[i] >= 1
-            elif self.alpha[i] == self.C:
+            elif self.with_epsilon(self.alpha[i], self.C):
                 result[i] = v[i] <= 1
             else:
                 result[i] = v[i] == 1
