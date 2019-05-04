@@ -12,7 +12,7 @@ Simple implementation of a Support Vector Machine using the Sequential Minimal O
 * fastcache (optional)
 
 ## Example
-See `example/example.ipynb`.
+See `example/example.pdf`.
 
 ## Reference
 See `presentation/presentation.pdf` Reference part.
