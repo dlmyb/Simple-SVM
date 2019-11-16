@@ -20,7 +20,7 @@ def rand(m, x):
         r = np.random.randint(m)
     return r
 
-def lru_kernel(X, kernel_func, maxsize=1024):
+def lru_kernel(X, kernel_func, maxsize=1e4):
     n, _ = X.shape
     cache_size = int(min(n*(n+1)/2, maxsize))
     @lru_cache(maxsize=cache_size)
@@ -39,7 +39,7 @@ def gaussian(sigma):
     return func
 
 class SVM():
-    def __init__(self, max_iter=10000, C=1.0, epsilon=0.001, kernel='linear', sigma=1):
+    def __init__(self, max_iter=10000, C=1.0, epsilon=0.001, kernel='linear', sigma=1, debug=False):
         self.max_iter = max_iter
         self.C = C
         if kernel == 'linear':
@@ -50,8 +50,12 @@ class SVM():
             self.kernel = inner
         self.with_epsilon = with_epsilon(epsilon)
         self.b = None
+        self.epsilon = epsilon
+        self.debug = debug
 
     def fit(self, X, y):
+        if self.debug:
+            from datetime import datetime
         self.n, _ = X.shape
         self.alpha = np.zeros((self.n))
         self.X = X
@@ -61,7 +65,9 @@ class SVM():
         self.b = 0
         self.update()
 
-        for i in range(self.max_iter):
+        for _ in range(self.max_iter):
+            if self.debug and _ % 10 == 0:
+                print(_, datetime.now())
             kkt_1 = self.check_kkt()
             kkt_2 = np.sum(y * self.alpha)
             if np.all(kkt_1) and self.with_epsilon(kkt_2, 0) == True:
@@ -85,11 +91,9 @@ class SVM():
                 b_2 = self.b + Ej + y[i] * (alpha_i_new - alpha_i) * self.cache_kernel(min(i, j), max(i, j)) \
                         + y[j] * (alpha_j_new - alpha_j) * self.cache_kernel(j, j)
                 
-                # if 0 <= alpha_j_new <= self.C:
-                if not self.with_epsilon(alpha_j_new, 0) and not self.with_epsilon(alpha_j_new, self.C):
+                if 0 <= alpha_j_new <= self.C:
                     self.b = b_2
-                # elif 0 <= alpha_i_new <= self.C:
-                elif not self.with_epsilon(alpha_i_new, 0) and not self.with_epsilon(alpha_i_new, self.C):
+                elif 0 <= alpha_i_new <= self.C:
                     self.b = b_1
                 else:
                     self.b = (b_1 + b_2)/2
@@ -104,9 +108,14 @@ class SVM():
         self.y = self.y[support_vector]
     
     def update(self):
+        support_vector = self.with_epsilon(self.alpha, 0) == False
+        range_num = np.arange(self.n)[support_vector]
+        alpha = self.alpha[support_vector]
+        y = self.y[support_vector]
         for i in range(self.n):
-            k = np.array([self.cache_kernel(min(i, j), max(i, j)) for j in range(self.n)])
-            self.u[i] = np.sum(self.alpha * self.y * k) - self.b
+            k = np.array([self.cache_kernel(min(i, j), max(i, j)) for j in range_num])
+            self.u[i] = np.sum(alpha * y * k)
+        self.u -= self.b
 
     def check_kkt(self):
         result = np.zeros((self.n), dtype=np.bool)
@@ -124,9 +133,12 @@ class SVM():
         if self.b is None:
             return 1
         k = np.array([self.kernel(x, self.X[i]) for i in range(self.X.shape[0])])
-        return np.sign(np.sum(self.alpha * self.y * k) - self.b)
+        return np.sum(self.alpha * self.y * k) - self.b
 
     def predict(self, X):
+        return np.sign(np.array([self.__predict(X[i]) for i in range(X.shape[0])]))
+
+    def score(self, X):
         return np.array([self.__predict(X[i]) for i in range(X.shape[0])])
 
     def compute_L_H(self, alpha_prime_j, alpha_prime_i, y_j, y_i):
